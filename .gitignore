@@ -42,9 +42,13 @@ MANIFEST
 *.manifest
 *.spec
 
-# Installer logs
+# Installer logs and some test script
 pip-log.txt
 pip-delete-this-directory.txt
+SharePointTest.py
+TestLLM.py
+torchCheck.py
+VMCred.txt
 
 # Unit test / coverage reports
 htmlcov/

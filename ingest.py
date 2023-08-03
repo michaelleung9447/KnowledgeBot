@@ -2,6 +2,10 @@ import os
 import glob
 from typing import List
 from dotenv import load_dotenv
+import uuid
+import qdrant_client as qc
+import qdrant_client.http.models as qmodels
+from langchain.embeddings import LlamaCppEmbeddings
 
 from langchain.document_loaders import (
     CSVLoader,
@@ -18,14 +22,10 @@ from langchain.document_loaders import (
 )
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import Chroma
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.docstore.document import Document
-from constants import CHROMA_SETTINGS
-
 
 load_dotenv()
-
 
 # Map file extensions to document loaders and their arguments
 LOADER_MAPPING = {
@@ -44,9 +44,67 @@ LOADER_MAPPING = {
     # Add more mappings for other file extensions and loaders as needed
 }
 
-
 load_dotenv()
 
+client = qc.QdrantClient(url="localhost", port=6333
+                                         #path='C:/Users/user/KnowledgeBot/db'
+                                         )
+METRIC = qmodels.Distance.DOT
+DIMENSION = 1024
+COLLECTION_NAME = "myDocument"
+embeddings_model_name = os.environ.get("EMBEDDINGS_MODEL_NAME")
+model_type = os.environ.get('MODEL_TYPE')
+model_path = os.environ.get('MODEL_PATH')
+model_n_ctx = os.environ.get('MODEL_N_CTX')
+n_gpu_layers = os.environ.get('MODEL_N_GPU')
+n_threads = os.environ.get('MODEL_THREAD')
+
+#embeddings = LlamaCppEmbeddings(model_path=model_path, n_ctx=model_n_ctx, n_gpu_layers=n_gpu_layers ,n_threads=n_threads)
+embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+
+def create_index():
+    client.recreate_collection(
+    collection_name=COLLECTION_NAME,
+    vectors_config = qmodels.VectorParams(
+            size=DIMENSION,
+            distance=METRIC,
+        )
+    )
+
+def embed_text(text):
+    #embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
+    vectors = embeddings.client.encode(text).tolist()
+    #vectors = embeddings.embed_documents([text])
+    return vectors
+
+def create_subsection_vector(section_content):
+    vector = embed_text(section_content.page_content)
+    id = str(uuid.uuid1().int)[:32]
+    payload = section_content
+    return id, vector, payload
+
+def add_doc_to_index(subsections):
+    ids = []
+    vectors = []
+    payloads = []
+    
+    for section_content in subsections:
+        id, vector, payload = create_subsection_vector(
+                section_content
+            )
+        ids.append(id)
+        vectors.append(vector)
+        payloads.append(payload)
+    
+    ## Add vectors to collection
+    client.upsert(
+        collection_name=COLLECTION_NAME,
+        points=qmodels.Batch(
+            ids = ids,
+            vectors = vectors,
+            payloads = payloads
+        ),
+    )
 
 def load_single_document(file_path: str) -> Document:
     ext = "." + file_path.rsplit(".", 1)[-1]
@@ -76,8 +134,8 @@ def main():
 
     # Load documents and split in chunks
     print(f"Loading documents from {source_directory}")
-    chunk_size = 500
-    chunk_overlap = 50
+    chunk_size = 800
+    chunk_overlap = 200
     documents = load_documents(source_directory)
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     texts = text_splitter.split_documents(documents)
@@ -85,12 +143,11 @@ def main():
     print(f"Split into {len(texts)} chunks of text (max. {chunk_size} characters each)")
 
     # Create embeddings
-    embeddings = HuggingFaceEmbeddings(model_name=embeddings_model_name)
-    
-    # Create and store locally vectorstore
-    db = Chroma.from_documents(texts, embeddings, persist_directory=persist_directory, client_settings=CHROMA_SETTINGS)
-    db.persist()
-    db = None
+
+    create_index()
+
+    add_doc_to_index(texts)
+        
 
 
 if __name__ == "__main__":

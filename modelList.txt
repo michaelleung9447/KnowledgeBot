@@ -1,0 +1,6 @@
+7B/wizard-vicuna-7b-uncensored-superhot-8k.ggmlv3.q6_K.bin
+13B/wizard-vicuna-13b-uncensored-superhot-8k.ggmlv3.q6_K.bin
+13B/open-llama-13b-open-instruct.ggmlv3.q4_K_M.bin
+13B/open-llama-13b-open-instruct.ggmlv3.q6_K.bin
+13B/llama-2-13b-chat.ggmlv3.q5_K_M.bin
+13B/llama-2-13b.ggmlv3.q5_K_S.bin
